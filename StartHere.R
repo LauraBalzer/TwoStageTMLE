@@ -34,7 +34,7 @@ J <- 30
 # number of participants per cluster
 n <- c(100, 150, 200)
 # set number of simulation repetitions
-nReps <- 50
+nReps <- 500
 # SuperLearner library for individual-level TMLE to control for differential missingness
 SL.library <- c('SL.mean', 'SL.glm', 'SL.gam')
 
