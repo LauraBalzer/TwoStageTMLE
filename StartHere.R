@@ -28,6 +28,9 @@ effect <- T
 # do.complex = T for main simulation study
 # do.complex = F for supplementary simulation study
 do.complex <- T
+# dropM = T explore performance of GEEs, mixed models, & CARE when not adjusting for M
+# (only applicable to the complex DGP)
+dropM <- T
 
 # number of clusters
 J <- 30
@@ -52,7 +55,7 @@ pop.truth <- get.truth.pop(do.complex=do.complex, effect=effect, n=n, J=5000)
 for(i in 1:nReps){
   
   out<- getTrialData(do.complex=do.complex, effect=effect, n=n, J=J, pop.truth=pop.truth,
-                    SL.library=SL.library, verbose=F)
+                    SL.library=SL.library, dropM=dropM, verbose=F)
   truth[i,]<- out$truth
   
   ttest.b[i,] <- out$ttest.b
@@ -118,13 +121,8 @@ colMeans(truth, na.rm=T)
 
 
 file.name <- paste('MAIN', do.complex, 'J', J, 'effect', effect,
+                   ifelse(!do.complex | dropM, 'noM', 'wM'),
                    'reps', nReps, format(Sys.time(),"%d%b%Y"), 'Rdata', sep='.' )
 save(truth, J, n, ttest.b, care.b, mixed.b, gee.b, aug.RR,tmle.RD.b, tmle.RR.b,
      ttest.p, care.p, mixed.p, gee.p, aug.p, tmle.RD.p, tmle.RR.p, SL.library,
      file=file.name)
-
-
-
-
-
-
