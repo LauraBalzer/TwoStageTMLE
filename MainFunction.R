@@ -5,10 +5,8 @@
 #"Two-Stage TMLE to Reduce Bias and Improve Efficiency in Cluster Randomized Trials"
 
 
-
-# getTrialData: function to get pairwise difference for a trial of 32
-
-getTrialData<- function(do.complex, effect, n, J, pop.truth, SL.library='glm', verbose=F){
+getTrialData<- function(do.complex, effect, n, J, pop.truth, SL.library='glm', 
+                        dropM=F, verbose=F){
   
   # GENERATE THE DATA   
   if(do.complex){
@@ -26,8 +24,7 @@ getTrialData<- function(do.complex, effect, n, J, pop.truth, SL.library='glm', v
   }
   # cluster-level covariates
   clust.cov <- c('X1.c', 'X2.c')
-  # all the covariates
-  cov <- c(ind.cov, clust.cov)
+
   
   #TRUTH
   if(is.na(pop.truth[1]) ){
@@ -67,15 +64,24 @@ getTrialData<- function(do.complex, effect, n, J, pop.truth, SL.library='glm', v
   ttest.p <- output.ttest(psi=truth$RD,
                           g=t.test(y=Y.0p, x=Y.1p, paired=T),
                           gRR=F, paired=T)
-   
+  
+  #---------------------------- 
   # STAGE 2 TMLEs using Adaptive Prespecification for intervention effects
   # Risk difference 
   TT.RD <- do.tmles(goal='RD', psi=truth$RD, data.C=data.C, clust.cov=clust.cov)
   # Risk ratio
   TT.RR <- do.tmles(goal='aRR', psi=truth$aRR, data.C=data.C, clust.cov=clust.cov)
+  #----------------------------
+  
+  # if dropping M from the adjustment set in the complex setting
+  if(do.complex & dropM){
+    ind.cov <- c('X1','X2')
+  }    
+  # all the covariates
+  cov <- c(ind.cov, clust.cov)
   
   # DR-GEE for risk ratio
-  aug.RR <- do.gee.aug(train=O, psi=truth$aRR, link="poisson", do.complex=do.complex)
+  aug.RR <- do.gee.aug(train=O, psi=truth$aRR, link="poisson", do.complex=do.complex, dropM=dropM)
 
   # COMPLETE CASE ANALYSES
   ## subset on fully observed observations 
@@ -91,9 +97,9 @@ getTrialData<- function(do.complex, effect, n, J, pop.truth, SL.library='glm', v
 
   # MIXED MODELS for risk ratio
   mixed.b <- do.mixed.models(train=train, psi=truth$aRR, paired=F, link='poisson',
-                             do.complex = do.complex)
+                             do.complex = do.complex, dropM=dropM)
   mixed.p <- do.mixed.models(train=train, psi=truth$aRR, paired=T, link='poisson',
-                             do.complex = do.complex)
+                             do.complex = do.complex, dropM=dropM)
 
   # RETURN for all estimators
   RETURN <- list(ttest.b=ttest.b,
