@@ -137,7 +137,7 @@ output.ttest<- function(psi, g, gRR=F, paired=F){
 
 # GEE: Generalized estimating equations 
 library(geepack)
-do.gee <- function(train, ind.cov, psi, paired=F, link){
+do.gee <- function(train, ind.cov, psi, paired=F, link, dropM=F){
   
   N <- sum(!duplicated(train$id))
   id <- train$id
@@ -156,10 +156,10 @@ do.gee <- function(train, ind.cov, psi, paired=F, link){
 
 # MIXED MODELS (a.k.a., random effect models)
 library('lme4')
-do.mixed.models <- function(train, paired=F, psi, link, do.complex){
+do.mixed.models <- function(train, paired=F, psi, link, do.complex, dropM=F){
   
   N <- sum(!duplicated(train$id))
-  if(do.complex){
+  if(do.complex & !dropM){
     if(paired){
       m <-  glmer(Y~ A+ X1 +X2 + M + X1.c + X2.c +(1 | pair),
                   data=train, family=link ) 
@@ -184,10 +184,10 @@ do.mixed.models <- function(train, paired=F, psi, link, do.complex){
 
 # DOUBLE-ROBUST GEE (DR-GEE)
 library('CRTgeeDR')
-do.gee.aug <- function(train, psi, link , do.complex=T){
+do.gee.aug <- function(train, psi, link , do.complex=T, dropM=F){
   N <- sum(!duplicated(train$id))
   train[train$Delta==0,'Y']<- NA
-  if(do.complex){
+  if(do.complex & !dropM){
     out <- geeDREstimation(formula=Y~A, nameY='Y', id='id', nameTRT='A', nameMISS='Delta',
                            data=train, family=link, 
                            model.augmentation.ctrl = Y~ X1 + X2 + M + X1.c + X2.c,
