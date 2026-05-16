@@ -1,0 +1,141 @@
+---
+title: "Reproducing Table 2 from the paper"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Reproducing Table 2 from the paper}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+```
+
+Table 2 of Balzer *et al.* (2021) reports the finite-sample performance of
+the Two-Stage TMLE under the paper's main simulation: 500 replicates of
+a 30-cluster CRT with post-baseline causes of missingness. This vignette
+reproduces the Two-Stage TMLE rows of that table.
+
+The vignette is set to `eval = FALSE` because each replicate is slow
+(Stage 1 fits Super Learner inside every cluster, then Stage 2 fits a
+TMLE with cross-validated APS). Allow ~30 minutes of CPU for the full
+500 replicates. To run it quickly while developing, set `nReps <- 50`.
+
+```{r setup-libs}
+library(TwoStageTMLE)
+library(data.table)
+
+set.seed(1)
+J <- 30
+n <- c(100, 150, 200)
+nReps <- 500
+sl_library <- c("SL.mean", "SL.glm", "SL.gam")
+```
+
+## Compute the population truth
+
+A large counterfactual sample (5000 clusters) gives us the true population
+risk difference and risk ratio for comparison.
+
+```{r truth}
+pop_truth <- TwoStageTMLE:::get_truth_pop(
+  do_complex = TRUE, effect = TRUE, n = n, J = 5000
+)
+pop_truth
+```
+
+The paper reports `RD = -9.1%` and `aRR = 0.88`.
+
+## Run the simulation
+
+For each replicate: simulate one trial, run Stage 1, run Stage 2 with APS
+twice (RD with break-match, aRR keeping the matches), record point
+estimate / SE / coverage / rejection.
+
+```{r sim}
+rows_rd <- vector("list", nReps)
+rows_rr <- vector("list", nReps)
+
+for (rep in seq_len(nReps)) {
+  X_all <- TwoStageTMLE:::gen_data_complex(effect = TRUE, n = n, J = J)
+  O <- TwoStageTMLE:::get_obs(X_all, exclude = FALSE)
+
+  stage1 <- stage1_tmle(
+    data = O,
+    ind_cov = c("X1", "X2", "M"),
+    clust_cov = c("X1.c", "X2.c"),
+    sl_library = sl_library
+  )
+  s2_in <- copy(stage1); s2_in[, Y := tmle]
+  s2_in <- add_weights(s2_in, target = "clust")
+
+  # Match the paper's APS setup: no 'U' in the candidate list; always remove
+  # the q-selected variable from g candidates (questions_for_laura.md Q14).
+  clust_cov <- c("X1.c", "X2.c")
+  cand <- list(
+    cand_q_adj = as.list(clust_cov), cand_q_form = rep("glm", length(clust_cov)),
+    cand_g_adj = as.list(clust_cov), cand_g_form = rep("glm", length(clust_cov))
+  )
+
+  rows_rd[[rep]] <- stage2_tmle(
+    data = s2_in, goal = "RD",  target = "clust", break_match = TRUE,
+    do_data_adapt = TRUE, remove_pscore = TRUE,
+    cand_q_adj = cand$cand_q_adj, cand_q_form = cand$cand_q_form,
+    cand_g_adj = cand$cand_g_adj, cand_g_form = cand$cand_g_form,
+    psi = pop_truth$RD
+  )
+  rows_rr[[rep]] <- stage2_tmle(
+    data = s2_in, goal = "aRR", target = "clust", break_match = FALSE,
+    do_data_adapt = TRUE, remove_pscore = TRUE,
+    cand_q_adj = cand$cand_q_adj, cand_q_form = cand$cand_q_form,
+    cand_g_adj = cand$cand_g_adj, cand_g_form = cand$cand_g_form,
+    psi = pop_truth$aRR
+  )
+
+  if (rep %% 25 == 0) message("rep ", rep)
+}
+
+results_rd <- rbindlist(rows_rd)
+results_rr <- rbindlist(rows_rr)
+```
+
+## Summarise
+
+For each scale, average the point estimate, its bias, the Monte-Carlo SE,
+the average SE estimate, coverage, and power.
+
+```{r summary}
+summarise <- function(res, true_psi, on_log_scale = FALSE) {
+  pt   <- mean(res$est)
+  bias <- mean(res$est - true_psi)
+  if (on_log_scale) {
+    sigma_mc <- sd(log(res$est))
+    sigma_ee <- mean(res$se)
+  } else {
+    sigma_mc <- sd(res$est)
+    sigma_ee <- mean(res$se)
+  }
+  ci_cov <- mean(res$cover, na.rm = TRUE)
+  power  <- mean(res$reject)
+  data.frame(pt = pt, bias = bias, sigma_mc = sigma_mc, sigma_ee = sigma_ee,
+             ci_cov = ci_cov, power = power)
+}
+
+cat("TMLE on the risk difference (break match):\n")
+print(summarise(results_rd, pop_truth$RD), row.names = FALSE)
+
+cat("\nTMLE on the risk ratio (keep match):\n")
+print(summarise(results_rr, pop_truth$aRR, on_log_scale = TRUE), row.names = FALSE)
+```
+
+## Expected results
+
+From Table 2 of the paper (the two Two-Stage TMLE rows):
+
+| Scale | pt | bias | σ (MC) | σ̂ (avg) | CI cov | power |
+|---|---|---|---|---|---|---|
+| RD, break match  | -9.8% | -0.7% | 0.046 | 0.038 | 98.8% | 52.8% |
+| aRR, keep match  | 0.9   | 0.0   | 0.051 | 0.058 | 96.8% | 57.8% |
+
+The package's output will match these to within Monte Carlo noise
+(500 reps is enough to get the second decimal right).

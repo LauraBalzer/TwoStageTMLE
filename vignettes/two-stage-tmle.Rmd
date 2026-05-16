@@ -1,0 +1,172 @@
+---
+title: "Two-Stage TMLE: walkthrough"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Two-Stage TMLE: walkthrough}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+This vignette walks through the Two-Stage TMLE pipeline of Balzer *et al.*
+(2021) on simulated cluster randomized trial (CRT) data. We will:
+
+1. Generate one simulated CRT (30 clusters, 100-200 participants per cluster,
+   pair-matched, post-baseline missingness).
+2. Run **Stage 1** — within each cluster, an individual-level TMLE that
+   adjusts for differential outcome measurement.
+3. Run **Stage 2** — a cluster-level TMLE with Adaptive Pre-specification
+   that picks the adjustment variable that maximises empirical efficiency.
+4. Inspect point estimates, 95% confidence intervals, and the IC-based
+   variance.
+
+The simulation data-generating process is the same one used in the paper
+(§ 5). It is bundled inside the package for testing and reproducibility but
+is not exported — you can access it via `TwoStageTMLE:::gen_data_complex()`.
+
+## Generate a single trial
+
+```{r generate}
+library(TwoStageTMLE)
+library(data.table)
+
+set.seed(1)
+J <- 30
+n <- c(100, 150, 200)
+X_all <- TwoStageTMLE:::gen_data_complex(effect = TRUE, n = n, J = J)
+head(X_all)
+```
+
+Each row is an individual; `id` is the cluster, `pair` is the matched-pair
+identifier, `A` is the cluster-level treatment, `Delta` indicates whether
+the outcome was measured, `Y` is the (possibly missing) outcome, and
+`Y.1` / `Y.0` are the counterfactual outcomes (known here because we
+simulated them). `X1`, `X2`, `M` are individual covariates; `X1.c`, `X2.c`
+are the cluster-level means of `X1`, `X2`.
+
+Mask the missing outcomes and drop the counterfactuals — that's what a real
+analyst would see:
+
+```{r mask}
+O <- TwoStageTMLE:::get_obs(X_all, exclude = FALSE)
+head(O[, c("id", "pair", "A", "X1", "X2", "M", "Delta", "Y")])
+```
+
+## Stage 1: cluster-specific endpoints
+
+Stage 1 estimates the cluster-specific mean outcome `Y^c` controlling for
+differential measurement. Within each cluster separately, we fit an
+individual-level TMLE with `Delta` as the "treatment" node (we are
+hypothetically intervening to set `Delta = 1`) and adjustment variables
+`W = (X1, X2, M)`.
+
+```{r stage1}
+stage1 <- stage1_tmle(
+  data = O,
+  ind_cov = c("X1", "X2", "M"),
+  clust_cov = c("X1.c", "X2.c"),
+  sl_library = c("SL.mean", "SL.glm", "SL.gam")
+)
+stage1
+```
+
+Each row is one cluster. `unadj` is the simple mean of measured outcomes
+(unadjusted Stage 1 estimator) and `tmle` is the TMLE estimate of `Y^c`.
+The two columns should differ when missingness depends on the covariates.
+
+## Stage 2: intervention effect with Adaptive Pre-specification
+
+Stage 2 takes those cluster-specific endpoints and fits a cluster-level
+TMLE comparing intervention to control. Adaptive Pre-specification picks
+the single adjustment variable that minimises the cross-validated variance
+of the resulting estimator. For this trial we let APS choose from `X1.c`,
+`X2.c`, or no adjustment (`U`).
+
+```{r stage2}
+stage2_in <- copy(stage1)
+stage2_in[, Y := tmle]              # use the Stage 1 TMLE as outcome
+stage2_in <- add_weights(stage2_in, target = "clust")
+
+cand <- cand_adj(c("X1.c", "X2.c"))
+
+est <- stage2_tmle(
+  data = stage2_in,
+  goal = "RD",
+  target = "clust",
+  break_match = FALSE,              # preserve the matched pairs
+  do_data_adapt = TRUE,
+  cand_q_adj = cand$cand_q_adj, cand_q_form = cand$cand_q_form,
+  cand_g_adj = cand$cand_g_adj, cand_g_form = cand$cand_g_form
+)
+est[, .(est, ci_lo, ci_hi, se, pval, q_adj, g_adj)]
+```
+
+Key columns in the output:
+
+* `est` — point estimate of the risk difference (back-transformed to the
+  natural scale).
+* `ci_lo`, `ci_hi` — 95% confidence interval.
+* `se` — IC-based standard error on the log scale for `aRR` / `OR`,
+  natural scale for `RD`.
+* `pval` — two-sided p-value (use `one_sided = TRUE` and `alt_smaller` to
+  test a one-sided alternative).
+* `q_adj`, `g_adj` — index into `cand_q_adj` / `cand_g_adj` of the
+  variable APS chose (1 = the unadjusted estimator `"U"`).
+
+## End-to-end driver
+
+The two-step procedure above can be run as a single call:
+
+```{r e2e, eval = FALSE}
+out <- two_stage_tmle(
+  data = O,
+  ind_cov = c("X1", "X2", "M"),
+  clust_cov = c("X1.c", "X2.c"),
+  goal = "RD", target = "clust", break_match = FALSE,
+  do_data_adapt = TRUE,
+  cand_q_adj = cand$cand_q_adj, cand_q_form = cand$cand_q_form,
+  cand_g_adj = cand$cand_g_adj, cand_g_form = cand$cand_g_form
+)
+out$est        # Stage 2 estimate
+out$stage1     # cluster-level data with `unadj` and `tmle` columns
+```
+
+## When to use what
+
+* `goal`: `"RD"` for risk difference, `"aRR"` for arithmetic risk ratio,
+  `"OR"` for odds ratio. The paper focuses on `RD` and `aRR`; `OR` is
+  supported but not validated against published results.
+* `target`: `"clust"` if you want the cluster-level effect (each cluster
+  weighted equally), `"indv"` if you want the individual-level effect
+  (each participant weighted equally). The two coincide when cluster
+  sizes are equal.
+* `break_match`: in pair-matched designs, `FALSE` preserves the matches
+  (variance estimated over `N/2` pair sums; `t` with `N/2 - 1` df) and
+  `TRUE` treats clusters as independent (variance over `N` clusters;
+  `t` with `N - 2` df). The paper recommends preserving the matches when
+  pair-matching was used for randomisation; doing so typically yields
+  more power.
+* `do_data_adapt`: `TRUE` runs Adaptive Pre-specification. `FALSE` uses
+  the `q_adj` / `g_adj` you pass in directly (or the unadjusted estimator
+  if both are `NULL`).
+* `remove_pscore`: see the package's `questions_for_laura.md`; this
+  argument controls whether the variable APS picks for `q_adj` is
+  excluded from the `g_adj` candidate set. In a CRT with few clusters
+  and only main-terms GLMs as candidates, `TRUE` matches the original
+  2021 paper behaviour.
+
+## References
+
+Balzer L.B., van der Laan M., Ayieko J., Kamya M., Chamie G., Schwab J.,
+Havlir D., Petersen M. (2021).
+**Two-Stage TMLE to Reduce Bias and Improve Efficiency in Cluster
+Randomized Trials.**
+<https://arxiv.org/abs/2106.15737>
+
+Balzer L.B., van der Laan M., Petersen M., SEARCH Consortium (2016).
+**Adaptive pre-specification in randomized trials with and without
+pair-matching.**
+*Statistics in Medicine* 35(10):4528-4545.

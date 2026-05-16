@@ -1,0 +1,38 @@
+Package: TwoStageTMLE
+Title: Two-Stage Targeted Maximum Likelihood Estimation for Cluster Randomized Trials
+Version: 0.0.0.9000
+Authors@R: c(
+    person("Laura B.", "Balzer", role = c("aut", "cre"),
+           email = "lbalzer@umass.edu"),
+    person("Joshua", "Schwab", role = "aut",
+           email = "jschwab77@berkeley.edu"))
+Description: Implements the Two-Stage TMLE estimator of Balzer et al. (2021)
+    <doi:10.48550/arXiv.2106.15737> for cluster randomized trials. Stage 1
+    fits an individual-level TMLE within each cluster separately to adjust
+    for differential outcome measurement on baseline and post-baseline
+    covariates. Stage 2 fits a cluster-level TMLE with Adaptive
+    Pre-specification to flexibly select adjustment variables that
+    optimise precision, while preserving Type-I error control.
+License: GPL (>= 3)
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+Depends:
+    R (>= 4.1)
+Imports:
+    data.table,
+    ltmle,
+    stats
+Suggests:
+    earth,
+    gam,
+    glmnet,
+    knitr,
+    nbpMatching,
+    rmarkdown,
+    SuperLearner,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+URL: https://github.com/LauraBalzer/TwoStageTMLE
+BugReports: https://github.com/LauraBalzer/TwoStageTMLE/issues
