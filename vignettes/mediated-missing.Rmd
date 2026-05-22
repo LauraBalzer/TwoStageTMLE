@@ -1,0 +1,194 @@
+---
+title: "Two-Stage TMLE for the multilevel-mediation-missing data problem"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Two-Stage TMLE for the multilevel-mediation-missing data problem}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>")
+```
+
+This vignette walks through the **Nakato et al. (2026)** ratio-based Stage 1
+estimator for cluster randomized trials (CRTs) of strategies that aim to
+*both* improve reach into the target population *and* health outcomes among
+those reached. The motivating setup, from the SAPPHIRE / Peer-led DCP HIV
+prevention trials:
+
+* A cluster-level intervention is intended to expand **risk screening** (an
+  indicator `M`) and increase **uptake of biomedical prevention** (the
+  outcome `Y2`).
+* True HIV risk status `Y1*` is **observed only among those screened** —
+  i.e., when `M = 1`. We work with the observed `Y1 = M * Y1*`.
+* The target population is *persons with HIV risk* — but membership in that
+  population is partially missing, mediated by the intervention itself.
+
+Simply restricting to the screened biases estimates because screening
+mediates the intervention effect. Restricting to the observed-eligible
+(`Y1 = 1`) inherits the same problem. The Nakato Stage 1 estimator
+sidesteps this with a ratio:
+
+$$
+Y^c \;=\; \frac{\mathbb{P}(Y_2 = 1)}{\mathbb{E}\!\bigl[\mathbb{P}(Y_1 = 1 \mid M = 1, W)\bigr]}
+$$
+
+where the numerator is the empirical proportion uptaking and the
+denominator is a TMLE for the prevalence of risk in the target population,
+computed *within each cluster*, adjusted for baseline (and optionally
+time-varying) covariates. Stage 2 then runs the usual cluster-level TMLE
+on these cluster endpoints.
+
+## 1. Simulate one CRT
+
+We use a condensed version of the Nakato (2026) DGP. Each cluster has
+`~100` individuals; the intervention `A` increases the probability of
+screening; the outcome `Y2 = 1` is possible only among the
+screened-and-eligible.
+
+```{r dgp}
+library(TwoStageTMLE)
+library(data.table)
+
+set.seed(2026)
+
+gen_cluster <- function(N, j) {
+  UE1 <- rep(runif(1, -1, 1), N); UE2 <- rep(runif(1, -1, 1), N)
+  E1 <- rep(rnorm(1, UE1[1], 0.5), N); E2 <- rep(rnorm(1, UE2[1], 0.5), N)
+  W1 <- rnorm(N, 0, 0.5); W2 <- rnorm(N, 0, 0.5); W3 <- rbinom(N, 1, 0.5)
+  pY1 <- plogis(0.5 + W1 + W2 - W3 + 0.25*E1 + 0.25*E2)
+  data.table(id = j, E1 = E1, E2 = E2, W1 = W1, W2 = W2, W3 = W3,
+             UE1 = UE1, UE2 = UE2, Y1_star = as.integer(runif(N) < pY1))
+}
+
+J <- 20
+N_per <- 120
+dat <- rbindlist(lapply(seq_len(J), function(j) gen_cluster(N_per, j)))
+
+# Randomize intervention at the cluster level
+A_per <- sample(c(rep(1L, J/2), rep(0L, J/2)))
+dat[, A := A_per[id]]
+
+# Screening: boosted by A
+pM <- plogis(-0.5 + 0.6*dat$A + 0.5*dat$W1 + 0.4*dat$W2 -
+              0.4*dat$A*dat$W3 + 0.4*(1-dat$A)*dat$W3 +
+              0.1*dat$UE1 + 0.1*dat$UE2)
+dat[, M := as.integer(runif(.N) < pM)]
+
+# Observed risk indicator
+dat[, Y1 := Y1_star * M]
+
+# Outcome: only happens among screened-AND-eligible
+pY2 <- plogis(0.2 + 0.1*dat$A + dat$W1 + 0.5*dat$W2 +
+              2*dat$W3 + 0.2*dat$E1 + 0.2*dat$E2)
+dat[, Y2 := ifelse(Y1_star == 1 & M == 1,
+                   as.integer(runif(.N) < pY2),
+                   0L)]
+
+dat[, c("UE1", "UE2", "Y1_star") := NULL]
+head(dat)
+```
+
+About **`r round(100 * mean(dat$M))`%** of individuals are screened;
+**`r round(100 * mean(dat$Y2))`%** end up taking up prevention.
+
+## 2. Stage 1 — the ratio endpoint per cluster
+
+`stage1_mediated()` fits, within each cluster, an `ltmle()` for
+`E[P(Y1 = 1 | M = 1, W)]` (the denominator) and pairs it with the
+empirical mean of `Y2` (the numerator). The default Super Learner library
+is `c("SL.mean", "SL.glm", "SL.gam")`, matching Nakato (2026).
+
+```{r stage1}
+s1 <- stage1_mediated(
+  data = dat,
+  ind_cov  = c("W1", "W2", "W3"),     # baseline covariates W
+  clust_cov = c("E1", "E2"),          # cluster-level covariates
+  sl_library = c("SL.mean", "SL.glm") # smaller library for vignette speed
+)
+s1[, .(id, A, E1, E2, screened, eligible, unadj, tmle)]
+```
+
+Each row is one cluster. The four candidate endpoints:
+
+* `screened` — `P(Y2 | M = 1)`: biased; conditions on the post-treatment
+  screening indicator.
+* `eligible` — `P(Y2 | Y1 = 1)`: biased; conditions on the
+  observed-eligible (a post-treatment, partly-missing variable).
+* `unadj` — ratio with the empirical denominator `P(Y1 | M = 1)`.
+* **`tmle`** — ratio with the TMLE-adjusted denominator. This is the
+  recommended endpoint and is what the driver hands to Stage 2.
+
+> **Time-varying covariates.** Box 1 of Balzer et al. defines the
+> denominator as `E[P(Y1 = 1 | M = 1, W, L)]` — that is, adjusting on
+> baseline `W` *and* time-varying covariates `L`. Pass both via `ind_cov`
+> if you have them. In this vignette `L` is empty.
+
+## 3. Stage 2 — cluster-level TMLE on the ratio endpoint
+
+Stage 2 is identical to the foundational two-stage workflow — the
+`stage1_mediated()` output drops straight into `stage2_tmle()`:
+
+```{r stage2}
+s2_in <- copy(s1)
+s2_in[, Y := tmle]
+s2_in <- add_weights(s2_in, target = "clust")
+
+cand <- cand_adj(c("E1", "E2"))
+
+est <- suppressWarnings(stage2_tmle(
+  data = s2_in,
+  goal = "RD", target = "clust", break_match = TRUE,
+  do_data_adapt = TRUE,
+  cand_q_adj = cand$cand_q_adj, cand_q_form = cand$cand_q_form,
+  cand_g_adj = cand$cand_g_adj, cand_g_form = cand$cand_g_form,
+  remove_pscore = TRUE
+))
+est[, .(est, ci_lo, ci_hi, se, pval, q_adj, g_adj)]
+```
+
+## 4. End-to-end driver
+
+The same analysis in a single call:
+
+```{r e2e, eval = FALSE}
+out <- two_stage_tmle_mediated(
+  data = dat,
+  ind_cov  = c("W1", "W2", "W3"),
+  clust_cov = c("E1", "E2"),
+  sl_library = c("SL.mean", "SL.glm"),
+  goal = "RD", target = "clust", break_match = TRUE,
+  do_data_adapt = TRUE,
+  cand_q_adj = cand$cand_q_adj, cand_q_form = cand$cand_q_form,
+  cand_g_adj = cand$cand_g_adj, cand_g_form = cand$cand_g_form,
+  remove_pscore = TRUE
+)
+out$est         # Stage 2 estimate
+out$stage1      # cluster table with screened/eligible/unadj/tmle endpoints
+```
+
+## 5. A note on variance
+
+Stage 2's variance uses the cluster-level influence curve and **treats the
+Stage 1 ratio `Yc` as a fixed observation at the cluster level**. The
+Stage-1 contribution to overall variance is asymptotically negligible
+when within-cluster sample sizes are large — see Box 2 of Balzer et al.
+(2021). Nakato (2026) verifies acceptable coverage by simulation at
+realistic cluster sizes (`N ≈ 200` per cluster, `J ∈ {20, 30, 50, 70}`).
+
+For inference that is also robust to the Adaptive Pre-specification
+selection, pass `do_cv_variance = TRUE` to `stage2_tmle()` (or via `...` in
+the driver) — the returned data.table will have additional `cv_*` columns
+with the CV-based CI and p-value.
+
+## References
+
+Nakato J., Balzer L.B. (2026). Methods for evaluating overall effectiveness
+of cluster-level strategies aiming to improve reach and health outcomes.
+
+Balzer L.B. et al. (2021). **Two-Stage TMLE to Reduce Bias and Improve
+Efficiency in Cluster Randomized Trials.** arXiv:2106.15737.
+
+Benitez A. et al. (2023). **Comparative methods for the analysis of cluster
+randomized trials.** arXiv:2110.09633.

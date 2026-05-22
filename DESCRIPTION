@@ -1,6 +1,6 @@
 Package: TwoStageTMLE
 Title: Two-Stage Targeted Maximum Likelihood Estimation for Cluster Randomized Trials
-Version: 0.0.0.9000
+Version: 0.0.0.9001
 Authors@R: c(
     person("Laura B.", "Balzer", role = c("aut", "cre"),
            email = "lbalzer@umass.edu"),

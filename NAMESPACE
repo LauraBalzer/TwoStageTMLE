@@ -2,9 +2,11 @@
 
 export(add_weights)
 export(cand_adj)
+export(stage1_mediated)
 export(stage1_tmle)
 export(stage2_tmle)
 export(two_stage_tmle)
+export(two_stage_tmle_mediated)
 importFrom(data.table,":=")
 importFrom(data.table,.I)
 importFrom(data.table,.N)

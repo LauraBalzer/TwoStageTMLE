@@ -8,6 +8,8 @@ utils::globalVariables(c(
   "id", "pair", "A", "Y", "U", "alpha",
   "nIndv", "nIndv_Y",
   "Delta",
+  # mediated-Stage-1 columns
+  "M", "Y1", "Y2",
   "QbarAW", "Qbar1W", "Qbar0W",
   "Qbar1W.star", "Qbar0W.star", "QbarAW.star",
   "H.1W", "H.0W", "H.AW", "pscore",
