@@ -60,7 +60,7 @@ for (rep in seq_len(nReps)) {
   X_all <- TwoStageTMLE:::gen_data_complex(effect = TRUE, n = n, J = J)
   O <- TwoStageTMLE:::get_obs(X_all, exclude = FALSE)
 
-  stage1 <- stage1_tmle(
+  stage1 <- TwoStageTMLE:::stage1_tmle(    # internal reference impl (Balzer 2021)
     data = O,
     ind_cov = c("X1", "X2", "M"),
     clust_cov = c("X1.c", "X2.c"),

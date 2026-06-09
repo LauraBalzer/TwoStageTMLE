@@ -95,13 +95,15 @@ About **`r round(100 * mean(dat$M))`%** of individuals are screened;
 
 ## 2. Stage 1 — the ratio endpoint per cluster
 
-`stage1_mediated()` fits, within each cluster, an `ltmle()` for
-`E[P(Y1 = 1 | M = 1, W)]` (the denominator) and pairs it with the
-empirical mean of `Y2` (the numerator). The default Super Learner library
-is `c("SL.mean", "SL.glm", "SL.gam")`, matching Nakato (2026).
+`stage1_mediated()` is an **internal reference implementation** of the Nakato
+(2026) ratio Stage 1 (hence `TwoStageTMLE:::`); it fits, within each cluster, an
+`ltmle()` for `E[P(Y1 = 1 | M = 1, W)]` (the denominator) and pairs it with the
+empirical mean of `Y2` (the numerator). The package's public Stage-1 API is
+[stage1_ratio()] / [stage1_apply()]; this vignette documents the paper method.
+The default Super Learner library is `c("SL.mean", "SL.glm", "SL.gam")`.
 
 ```{r stage1}
-s1 <- stage1_mediated(
+s1 <- TwoStageTMLE:::stage1_mediated(
   data = dat,
   ind_cov  = c("W1", "W2", "W3"),     # baseline covariates W
   clust_cov = c("E1", "E2"),          # cluster-level covariates
@@ -153,7 +155,7 @@ est[, .(est, ci_lo, ci_hi, se, pval, q_adj, g_adj)]
 The same analysis in a single call:
 
 ```{r e2e, eval = FALSE}
-out <- two_stage_tmle_mediated(
+out <- TwoStageTMLE:::two_stage_tmle_mediated(
   data = dat,
   ind_cov  = c("W1", "W2", "W3"),
   clust_cov = c("E1", "E2"),

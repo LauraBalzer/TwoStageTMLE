@@ -59,8 +59,14 @@ cluster-level dataset suitable for \code{\link[=stage2_tmle]{stage2_tmle()}}.
 Implements step 9.2 of Balzer et al. (2021): the individual-level TMLE is
 fit using \code{\link[ltmle:ltmle]{ltmle::ltmle()}} with \code{Anodes = Delta}, \code{Ynodes = Y}, \code{abar = 1},
 a user-supplied Super Learner library, and \code{stratify = TRUE}.
+
+Internal reference implementation of the Balzer et al. (2021)
+Stage 1 estimator. Not part of the public API — the package exports general
+building blocks (\code{\link[=stage1_mean]{stage1_mean()}}, \code{\link[=stage1_apply]{stage1_apply()}}, \code{\link[=stage2_tmle]{stage2_tmle()}}); the
+\code{two-stage-tmle} vignette shows how to compose this paper method from them.
 }
 \references{
 Balzer L.B. et al. (2021). Two-Stage TMLE to Reduce Bias and Improve
 Efficiency in Cluster Randomized Trials. arXiv:2106.15737.
 }
+\keyword{internal}

@@ -16,7 +16,11 @@
 #'   * `est` — the Stage 2 estimate `data.table`
 #'   * `stage1` — the Stage 1 cluster-level dataset
 #'
-#' @export
+#' @details Internal reference implementation of the Balzer et al. (2021)
+#'   end-to-end driver. Not part of the public API — compose the workflow from
+#'   [stage1_apply()] + [add_weights()] + [stage2_tmle()] (see the
+#'   `two-stage-tmle` vignette).
+#' @keywords internal
 two_stage_tmle <- function(data, ind_cov, clust_cov,
                            sl_library = c("SL.mean", "SL.glm", "SL.gam"),
                            target = c("clust", "indv"),

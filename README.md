@@ -32,8 +32,11 @@ set.seed(1)
 X_all <- TwoStageTMLE:::gen_data_complex(effect = TRUE, n = c(100, 150, 200), J = 30)
 O <- TwoStageTMLE:::get_obs(X_all, exclude = FALSE)
 
-# Run the full Two-Stage TMLE
-out <- two_stage_tmle(
+# Run the full Two-Stage TMLE. `two_stage_tmle()` is an internal reference
+# implementation of the Balzer (2021) driver; the public API is the general
+# building blocks (stage1_mean/stage1_apply + add_weights + stage2_tmle), shown
+# composed in vignette("two-stage-tmle").
+out <- TwoStageTMLE:::two_stage_tmle(
   data = O,
   ind_cov = c("X1", "X2", "M"),
   clust_cov = c("X1.c", "X2.c"),
@@ -53,11 +56,17 @@ For details, see `vignette("two-stage-tmle")` and
 
 ## Main functions
 
-* `two_stage_tmle()` — end-to-end driver
-* `stage1_tmle()` — within-cluster individual-level TMLE
+The package exposes general, composable building blocks; specific published
+methods (Balzer 2021, Nakato 2026) are documented in the vignettes as
+compositions of these (and kept as internal reference implementations).
+
+* `stage1_mean()` — one measurement-adjusted cluster mean
+* `stage1_ratio()` — ratio of two cluster means
+* `stage1_apply()` — general engine: map any per-cluster estimator over clusters
 * `stage2_tmle()` — cluster-level TMLE with Adaptive Pre-specification
 * `add_weights()` — compute analysis weights per Benitez *et al.* (2023)
 * `cand_adj()` — build candidate adjustment specifications for APS
+* `as_stage2_list()`, `flatten_stage2()` — list-based result helpers
 
 ## References
 

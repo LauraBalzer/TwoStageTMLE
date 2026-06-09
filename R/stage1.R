@@ -40,7 +40,11 @@
 #' Balzer L.B. et al. (2021). Two-Stage TMLE to Reduce Bias and Improve
 #' Efficiency in Cluster Randomized Trials. arXiv:2106.15737.
 #'
-#' @export
+#' @details Internal reference implementation of the Balzer et al. (2021)
+#'   Stage 1 estimator. Not part of the public API — the package exports general
+#'   building blocks ([stage1_mean()], [stage1_apply()], [stage2_tmle()]); the
+#'   `two-stage-tmle` vignette shows how to compose this paper method from them.
+#' @keywords internal
 stage1_tmle <- function(data, ind_cov, clust_cov,
                         sl_library = c("SL.mean", "SL.glm", "SL.gam"),
                         verbose = FALSE) {

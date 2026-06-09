@@ -65,7 +65,10 @@
 #' @seealso [stage1_tmle()] for the missing-outcomes-only version;
 #'   [two_stage_tmle_mediated()] for the end-to-end driver.
 #'
-#' @export
+#' @details Internal reference implementation of the Nakato et al. (2026)
+#'   ratio-based Stage 1 estimator. Not part of the public API — compose it from
+#'   [stage1_ratio()] / [stage1_apply()] (see the `mediated-missing` vignette).
+#' @keywords internal
 stage1_mediated <- function(data, ind_cov, clust_cov,
                             sl_library = c("SL.mean", "SL.glm", "SL.gam"),
                             verbose = FALSE) {

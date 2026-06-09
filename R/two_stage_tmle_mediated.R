@@ -38,7 +38,11 @@
 #' @seealso [two_stage_tmle()] for the missing-outcomes-only foundational
 #'   driver; [stage1_mediated()], [stage2_tmle()].
 #'
-#' @export
+#' @details Internal reference implementation of the Nakato et al. (2026)
+#'   end-to-end driver. Not part of the public API — compose the workflow from
+#'   [stage1_ratio()]/[stage1_apply()] + [add_weights()] + [stage2_tmle()] (see
+#'   the `mediated-missing` vignette).
+#' @keywords internal
 two_stage_tmle_mediated <- function(data, ind_cov, clust_cov,
                                     sl_library = c("SL.mean", "SL.glm", "SL.gam"),
                                     target = c("clust", "indv"),

@@ -75,6 +75,11 @@ as the outcome column. Variance is computed from the Stage 2 cluster-level
 influence curve and treats the cluster-level endpoint as fixed. This is
 asymptotically valid when within-cluster sample sizes are large; see
 Box 2 of Balzer et al. (2021) for the formal conditions.
+
+Internal reference implementation of the Nakato et al. (2026)
+end-to-end driver. Not part of the public API — compose the workflow from
+\code{\link[=stage1_ratio]{stage1_ratio()}}/\code{\link[=stage1_apply]{stage1_apply()}} + \code{\link[=add_weights]{add_weights()}} + \code{\link[=stage2_tmle]{stage2_tmle()}} (see
+the \code{mediated-missing} vignette).
 }
 \references{
 Nakato J., Balzer L.B. (2026). Methods for evaluating overall
@@ -88,3 +93,4 @@ Efficiency in Cluster Randomized Trials. arXiv:2106.15737.
 \code{\link[=two_stage_tmle]{two_stage_tmle()}} for the missing-outcomes-only foundational
 driver; \code{\link[=stage1_mediated]{stage1_mediated()}}, \code{\link[=stage2_tmle]{stage2_tmle()}}.
 }
+\keyword{internal}

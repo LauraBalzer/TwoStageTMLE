@@ -63,8 +63,13 @@ individual-level TMLE with `Delta` as the "treatment" node (we are
 hypothetically intervening to set `Delta = 1`) and adjustment variables
 `W = (X1, X2, M)`.
 
+`stage1_tmle()` is an **internal reference implementation** of the Balzer et al.
+(2021) Stage 1 (hence the `TwoStageTMLE:::` prefix); the package's public API is
+the general building blocks ([stage1_mean()], [stage1_apply()], [stage2_tmle()]),
+and this vignette documents how the paper method composes from them.
+
 ```{r stage1}
-stage1 <- stage1_tmle(
+stage1 <- TwoStageTMLE:::stage1_tmle(
   data = O,
   ind_cov = c("X1", "X2", "M"),
   clust_cov = c("X1.c", "X2.c"),
@@ -121,7 +126,7 @@ Key columns in the output:
 The two-step procedure above can be run as a single call:
 
 ```{r e2e, eval = FALSE}
-out <- two_stage_tmle(
+out <- TwoStageTMLE:::two_stage_tmle(
   data = O,
   ind_cov = c("X1", "X2", "M"),
   clust_cov = c("X1.c", "X2.c"),

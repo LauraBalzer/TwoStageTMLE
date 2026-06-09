@@ -14,14 +14,26 @@ adjust for differential outcome measurement. Stage 2 uses a
 cluster-level TMLE with Adaptive Pre-specification to select adjustment
 variables that optimise precision while preserving Type-I error control.
 }
+\details{
+The package exposes general, composable building blocks rather than
+paper-specific drivers. Specific published methods (Balzer et al. 2021;
+Nakato et al. 2026) are documented in the vignettes as compositions of these
+blocks (and kept as internal reference implementations for verification).
+}
 \section{Main functions}{
 
+Stage 1 (cluster-specific endpoints):
 \itemize{
-\item \code{\link[=two_stage_tmle]{two_stage_tmle()}} — end-to-end driver: data in, effect estimate out.
-\item \code{\link[=stage1_tmle]{stage1_tmle()}} — Stage 1 only, returns cluster-specific endpoint estimates.
-\item \code{\link[=stage2_tmle]{stage2_tmle()}} — Stage 2 only, takes cluster-specific endpoints and
-returns the intervention-effect estimate with inference.
-\item \code{\link[=cand_adj]{cand_adj()}} — build candidate adjustment specifications for APS.
+\item \code{\link[=stage1_mean]{stage1_mean()}} — one measurement-adjusted cluster mean.
+\item \code{\link[=stage1_ratio]{stage1_ratio()}} — ratio of two cluster means.
+\item \code{\link[=stage1_apply]{stage1_apply()}} — general engine: map any per-cluster estimator over clusters.
+}
+
+Stage 2 and helpers:
+\itemize{
+\item \code{\link[=stage2_tmle]{stage2_tmle()}} — cluster-level TMLE with Adaptive Pre-specification.
+\item \code{\link[=add_weights]{add_weights()}} — analysis weights; \code{\link[=cand_adj]{cand_adj()}} — APS candidate sets.
+\item \code{\link[=as_stage2_list]{as_stage2_list()}}, \code{\link[=flatten_stage2]{flatten_stage2()}} — list-based result helpers.
 }
 }
 

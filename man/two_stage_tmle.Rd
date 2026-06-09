@@ -39,3 +39,10 @@ Convenience wrapper that runs \code{\link[=stage1_tmle]{stage1_tmle()}} then \co
 individual-level observed data, returning the Stage 2 effect estimate
 together with the intermediate cluster-level dataset.
 }
+\details{
+Internal reference implementation of the Balzer et al. (2021)
+end-to-end driver. Not part of the public API — compose the workflow from
+\code{\link[=stage1_apply]{stage1_apply()}} + \code{\link[=add_weights]{add_weights()}} + \code{\link[=stage2_tmle]{stage2_tmle()}} (see the
+\code{two-stage-tmle} vignette).
+}
+\keyword{internal}

@@ -80,6 +80,10 @@ Stage 2 treats this endpoint as a fixed observation at the cluster level;
 the Stage 1 contribution to overall variance is assumed asymptotically
 negligible when within-cluster sample sizes are large. See Box 2 of
 Balzer et al. for the formal conditions.
+
+Internal reference implementation of the Nakato et al. (2026)
+ratio-based Stage 1 estimator. Not part of the public API — compose it from
+\code{\link[=stage1_ratio]{stage1_ratio()}} / \code{\link[=stage1_apply]{stage1_apply()}} (see the \code{mediated-missing} vignette).
 }
 \references{
 Nakato J., Balzer L.B. (2026). Methods for evaluating overall effectiveness
@@ -92,3 +96,4 @@ Efficiency in Cluster Randomized Trials. arXiv:2106.15737.
 \code{\link[=stage1_tmle]{stage1_tmle()}} for the missing-outcomes-only version;
 \code{\link[=two_stage_tmle_mediated]{two_stage_tmle_mediated()}} for the end-to-end driver.
 }
+\keyword{internal}
