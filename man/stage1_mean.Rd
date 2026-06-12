@@ -25,8 +25,9 @@ stage1_mean(
 
 \item{id_col, arm_col, clust_cov, verbose}{See \code{\link[=stage1_apply]{stage1_apply()}}.}
 
-\item{adj_covars}{Character vector of individual-level adjustment covariates
-for the \code{tmle} endpoint. \code{NULL} (default) gives an unadjusted estimate.}
+\item{adj_covars}{Adjustment covariates: a character vector of column names,
+\code{NULL} (default; unadjusted), or a function \code{(cluster_data) -> character}
+resolved per cluster (e.g. to shrink the adjustment set for small clusters).}
 
 \item{det_q_fun, det_cols}{Optional deterministic-Q closure and the column(s)
 it references (added to the modelling frame). See \code{\link[=fit_censored_mean]{fit_censored_mean()}}.}
@@ -34,21 +35,18 @@ it references (added to the modelling frame). See \code{\link[=fit_censored_mean
 \item{sl_library, variance_method}{Passed to \code{\link[=fit_censored_mean]{fit_censored_mean()}}.}
 }
 \value{
-A \code{data.table}; see \code{\link[=stage1_apply]{stage1_apply()}}. Endpoint columns \code{unadj}, \code{tmle}.
+A \code{data.table}; see \code{\link[=stage1_apply]{stage1_apply()}}. Endpoint column \code{est}.
 }
 \description{
 For each cluster, estimates \eqn{E[Y]} adjusting for differential measurement
 on \code{adj_covars} via a censored-mean TMLE (see \code{\link[=fit_censored_mean]{fit_censored_mean()}}). Returns
-the canonical cluster table with two endpoint columns:
-\itemize{
-\item \code{unadj} — censored mean with no covariate adjustment, and
-\item \code{tmle}  — censored mean adjusting for \code{adj_covars} (equals \code{unadj} when
-\code{adj_covars} is \code{NULL}).
-}
+the canonical cluster table with a single endpoint column \code{est}. For the
+\strong{unadjusted} estimate, call with \code{adj_covars = NULL} (the default).
 }
 \details{
 \code{Y} may contain \code{NA} for unmeasured participants; missingness is modelled as
-the censoring node.
+the censoring node. A fully-observed \code{Y} (no \code{NA}) reduces to its plain
+\code{mean()}.
 }
 \seealso{
 \code{\link[=stage1_ratio]{stage1_ratio()}}, \code{\link[=stage1_apply]{stage1_apply()}}

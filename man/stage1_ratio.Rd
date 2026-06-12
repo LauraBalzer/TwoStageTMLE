@@ -15,8 +15,6 @@ stage1_ratio(
   den_det_q = NULL,
   num_det_cols = NULL,
   den_det_cols = NULL,
-  num_censored = TRUE,
-  den_censored = TRUE,
   sl_library = "glm",
   variance_method = "tmle",
   arm_col = "A",
@@ -27,38 +25,37 @@ stage1_ratio(
 \arguments{
 \item{data}{Individual-level data (one row per participant).}
 
-\item{num_col, den_col}{Numerator and denominator column names.}
+\item{num_col, den_col}{Numerator and denominator column names (\code{NA} =
+unmeasured on that side).}
 
 \item{id_col, arm_col, clust_cov, verbose}{See \code{\link[=stage1_apply]{stage1_apply()}}.}
 
-\item{num_adj, den_adj}{Adjustment covariates for each side's \code{tmle} endpoint.}
+\item{num_adj, den_adj}{Adjustment covariates for each side: a character
+vector, \code{NULL} (unadjusted), or a function \code{(cluster_data) -> character}
+resolved per cluster (e.g. to shrink the set for small clusters).}
 
 \item{num_det_q, den_det_q, num_det_cols, den_det_cols}{Optional deterministic-Q
 closures and their referenced columns, per side.}
 
-\item{num_censored, den_censored}{If \code{TRUE} (default) the side is a censored
-mean (\code{NA} = unmeasured); if \code{FALSE} it is the plain \code{mean()} of the column.}
-
 \item{sl_library, variance_method}{Passed to \code{\link[=fit_censored_mean]{fit_censored_mean()}}.}
 }
 \value{
-A \code{data.table}; see \code{\link[=stage1_apply]{stage1_apply()}}. Endpoint columns \code{unadj}, \code{tmle}.
+A \code{data.table}; see \code{\link[=stage1_apply]{stage1_apply()}}. Endpoint column \code{est}.
 }
 \description{
 For each cluster, estimates \code{numerator / denominator}, where each side is a
-cluster mean that may be measurement-adjusted (a censored-mean TMLE) or a
-plain empirical mean. Returns the canonical cluster table with:
-\itemize{
-\item \code{unadj} — numerator(unadjusted) / denominator(unadjusted), and
-\item \code{tmle}  — numerator(adjusted)   / denominator(adjusted).
-}
+measurement-adjusted cluster mean (a censored-mean TMLE; see
+\code{\link[=fit_censored_mean]{fit_censored_mean()}}). Returns the canonical cluster table with a single
+endpoint column \code{est}. For the \strong{unadjusted} ratio, call with
+\verb{num_adj = NULL, den_adj = NULL} (the defaults).
 }
 \details{
-Each side is configured independently, so this covers both the coverage/yield
-shape (plain-mean numerator over an adjusted denominator) and the care-cascade
-shape (both sides censored and adjusted). When a side is a plain mean
-(\verb{*_censored = FALSE}), pre-code its column so the mean is the intended
-numerator/denominator (e.g. \code{NA} recoded to 0).
+This covers both the coverage/yield shape (a fully-observed numerator over a
+partially-missing, adjusted denominator) and the care-cascade shape (both
+sides partially missing and adjusted). A side whose column has \strong{no} \code{NA}
+reduces to its plain \code{mean()} (with no censoring the censored-mean TMLE
+returns the empirical mean), so pre-code a fully-observed numerator as desired
+(e.g. \code{NA} recoded to 0).
 }
 \seealso{
 \code{\link[=stage1_mean]{stage1_mean()}}, \code{\link[=stage1_apply]{stage1_apply()}}

@@ -68,109 +68,99 @@ stage1_apply <- function(data, estimator_fun, id_col = "id", arm_col = "A",
 #'
 #' For each cluster, estimates \eqn{E[Y]} adjusting for differential measurement
 #' on `adj_covars` via a censored-mean TMLE (see [fit_censored_mean()]). Returns
-#' the canonical cluster table with two endpoint columns:
-#' * `unadj` — censored mean with no covariate adjustment, and
-#' * `tmle`  — censored mean adjusting for `adj_covars` (equals `unadj` when
-#'   `adj_covars` is `NULL`).
+#' the canonical cluster table with a single endpoint column `est`. For the
+#' **unadjusted** estimate, call with `adj_covars = NULL` (the default).
 #'
 #' `Y` may contain `NA` for unmeasured participants; missingness is modelled as
-#' the censoring node.
+#' the censoring node. A fully-observed `Y` (no `NA`) reduces to its plain
+#' `mean()`.
 #'
 #' @param data Individual-level data (one row per participant).
 #' @param y_col Name of the outcome column (binary or bounded; `NA` = unmeasured).
 #' @param id_col,arm_col,clust_cov,verbose See [stage1_apply()].
-#' @param adj_covars Character vector of individual-level adjustment covariates
-#'   for the `tmle` endpoint. `NULL` (default) gives an unadjusted estimate.
+#' @param adj_covars Adjustment covariates: a character vector of column names,
+#'   `NULL` (default; unadjusted), or a function `(cluster_data) -> character`
+#'   resolved per cluster (e.g. to shrink the adjustment set for small clusters).
 #' @param det_q_fun,det_cols Optional deterministic-Q closure and the column(s)
 #'   it references (added to the modelling frame). See [fit_censored_mean()].
 #' @param sl_library,variance_method Passed to [fit_censored_mean()].
 #'
-#' @return A `data.table`; see [stage1_apply()]. Endpoint columns `unadj`, `tmle`.
+#' @return A `data.table`; see [stage1_apply()]. Endpoint column `est`.
 #' @seealso [stage1_ratio()], [stage1_apply()]
 #' @export
 stage1_mean <- function(data, y_col, id_col = "id", adj_covars = NULL,
                         det_q_fun = NULL, det_cols = NULL,
                         sl_library = "glm", variance_method = "tmle",
                         arm_col = "A", clust_cov = NULL, verbose = FALSE) {
-  est_fun <- function(oc) {
-    out <- .censored_mean_pair(oc, y_col, adj_covars, det_q_fun, det_cols,
-                               sl_library, variance_method)
-    c(unadj = out[["unadj"]], tmle = out[["tmle"]])
-  }
-  stage1_apply(data, est_fun, id_col = id_col, arm_col = arm_col,
-               clust_cov = clust_cov, verbose = verbose)
+  stage1_apply(
+    data,
+    function(oc) .censored_mean(oc, y_col, adj_covars, det_q_fun, det_cols,
+                                sl_library, variance_method),
+    id_col = id_col, arm_col = arm_col, clust_cov = clust_cov, verbose = verbose)
 }
 
 
 #' Stage 1: ratio of two cluster means
 #'
 #' For each cluster, estimates `numerator / denominator`, where each side is a
-#' cluster mean that may be measurement-adjusted (a censored-mean TMLE) or a
-#' plain empirical mean. Returns the canonical cluster table with:
-#' * `unadj` — numerator(unadjusted) / denominator(unadjusted), and
-#' * `tmle`  — numerator(adjusted)   / denominator(adjusted).
+#' measurement-adjusted cluster mean (a censored-mean TMLE; see
+#' [fit_censored_mean()]). Returns the canonical cluster table with a single
+#' endpoint column `est`. For the **unadjusted** ratio, call with
+#' `num_adj = NULL, den_adj = NULL` (the defaults).
 #'
-#' Each side is configured independently, so this covers both the coverage/yield
-#' shape (plain-mean numerator over an adjusted denominator) and the care-cascade
-#' shape (both sides censored and adjusted). When a side is a plain mean
-#' (`*_censored = FALSE`), pre-code its column so the mean is the intended
-#' numerator/denominator (e.g. `NA` recoded to 0).
+#' This covers both the coverage/yield shape (a fully-observed numerator over a
+#' partially-missing, adjusted denominator) and the care-cascade shape (both
+#' sides partially missing and adjusted). A side whose column has **no** `NA`
+#' reduces to its plain `mean()` (with no censoring the censored-mean TMLE
+#' returns the empirical mean), so pre-code a fully-observed numerator as desired
+#' (e.g. `NA` recoded to 0).
 #'
 #' @param data Individual-level data (one row per participant).
-#' @param num_col,den_col Numerator and denominator column names.
-#' @param num_censored,den_censored If `TRUE` (default) the side is a censored
-#'   mean (`NA` = unmeasured); if `FALSE` it is the plain `mean()` of the column.
-#' @param num_adj,den_adj Adjustment covariates for each side's `tmle` endpoint.
+#' @param num_col,den_col Numerator and denominator column names (`NA` =
+#'   unmeasured on that side).
+#' @param num_adj,den_adj Adjustment covariates for each side: a character
+#'   vector, `NULL` (unadjusted), or a function `(cluster_data) -> character`
+#'   resolved per cluster (e.g. to shrink the set for small clusters).
 #' @param num_det_q,den_det_q,num_det_cols,den_det_cols Optional deterministic-Q
 #'   closures and their referenced columns, per side.
 #' @param sl_library,variance_method Passed to [fit_censored_mean()].
 #' @param id_col,arm_col,clust_cov,verbose See [stage1_apply()].
 #'
-#' @return A `data.table`; see [stage1_apply()]. Endpoint columns `unadj`, `tmle`.
+#' @return A `data.table`; see [stage1_apply()]. Endpoint column `est`.
 #' @seealso [stage1_mean()], [stage1_apply()]
 #' @export
 stage1_ratio <- function(data, num_col, den_col, id_col = "id",
                          num_adj = NULL, den_adj = NULL,
                          num_det_q = NULL, den_det_q = NULL,
                          num_det_cols = NULL, den_det_cols = NULL,
-                         num_censored = TRUE, den_censored = TRUE,
                          sl_library = "glm", variance_method = "tmle",
                          arm_col = "A", clust_cov = NULL, verbose = FALSE) {
-  side <- function(oc, col, adj, det_q, det_cols, censored) {
-    if (!censored) {
-      m <- mean(oc[[col]])
-      return(list(unadj = m, tmle = m))
-    }
-    .censored_mean_pair(oc, col, adj, det_q, det_cols, sl_library, variance_method)
-  }
   est_fun <- function(oc) {
-    num <- side(oc, num_col, num_adj, num_det_q, num_det_cols, num_censored)
-    den <- side(oc, den_col, den_adj, den_det_q, den_det_cols, den_censored)
-    c(unadj = num[["unadj"]] / den[["unadj"]],
-      tmle  = num[["tmle"]]  / den[["tmle"]])
+    num <- .censored_mean(oc, num_col, num_adj, num_det_q, num_det_cols,
+                          sl_library, variance_method)
+    den <- .censored_mean(oc, den_col, den_adj, den_det_q, den_det_cols,
+                          sl_library, variance_method)
+    num / den
   }
   stage1_apply(data, est_fun, id_col = id_col, arm_col = arm_col,
                clust_cov = clust_cov, verbose = verbose)
 }
 
 
-# Internal: estimate the (unadjusted, adjusted) censored-mean pair for one
-# cluster's column. Builds the [det_cols..., C, Y] frame and calls
-# fit_censored_mean() once with no covariates and (if adj given) once with them.
-.censored_mean_pair <- function(oc, col, adj, det_q, det_cols,
-                                sl_library, variance_method) {
-  y     <- oc[[col]]
-  Cnode <- ltmle::BinaryToCensoring(is.censored = is.na(y))
-  base  <- data.frame(C = Cnode, Y = y)
-  if (!is.null(det_cols)) {
-    base <- cbind(as.data.frame(oc[, det_cols, with = FALSE]), base)
-  }
-  unadj <- fit_censored_mean(base, sl_library, det_q, variance_method)
-  if (is.null(adj)) {
-    tmle <- unadj
-  } else {
-    adjf <- cbind(as.data.frame(oc[, adj, with = FALSE]), base)
-    tmle <- fit_censored_mean(adjf, sl_library, det_q, variance_method)
-  }
-  list(unadj = unadj, tmle = tmle)
+# Internal: censored-mean estimate of E[Y] for one cluster's column, adjusting
+# for `adj` (NULL = unadjusted). Builds the [adj..., det_cols..., C, Y] frame and
+# calls fit_censored_mean(). `adj` may be a character vector, NULL, or a
+# function(cluster_data)->character (resolved per cluster). A fully-observed
+# column with no deterministic-Q short-circuits to the exact mean (with no
+# censoring the censored-mean TMLE returns the empirical mean for any adjustment
+# set; this is exact and skips a needless ltmle fit).
+.censored_mean <- function(oc, col, adj, det_q, det_cols,
+                           sl_library, variance_method) {
+  if (is.function(adj)) adj <- adj(oc)
+  y <- oc[[col]]
+  if (is.null(det_q) && !anyNA(y)) return(mean(y))
+  base <- data.frame(C = ltmle::BinaryToCensoring(is.censored = is.na(y)), Y = y)
+  if (!is.null(det_cols)) base <- cbind(as.data.frame(oc[, det_cols, with = FALSE]), base)
+  frame <- if (is.null(adj)) base else cbind(as.data.frame(oc[, adj, with = FALSE]), base)
+  fit_censored_mean(frame, sl_library, det_q, variance_method)
 }

@@ -54,16 +54,16 @@ test_that("stage1_mean matches an inline ltmle reference (machine precision)", {
   dat <- gen_censored_crt(J = 6, N_mean = 80, seed = 21L)
   lib <- "glm"; adj <- c("W1", "W2")
 
-  s1 <- stage1_mean(dat, y_col = "eligible", adj_covars = adj, sl_library = lib)
-  s1 <- s1[order(id)]
+  s1_adj   <- stage1_mean(dat, y_col = "eligible", adj_covars = adj,  sl_library = lib)[order(id)]
+  s1_unadj <- stage1_mean(dat, y_col = "eligible", adj_covars = NULL, sl_library = lib)[order(id)]
 
   ref <- t(vapply(sort(unique(dat$id)), function(j) {
     r <- ref_censored_pair(dat[id == j], "eligible", adj, lib)
     c(unadj = r$unadj, tmle = r$tmle)
   }, numeric(2)))
 
-  expect_equal(s1$unadj, ref[, "unadj"], tolerance = 1e-12)
-  expect_equal(s1$tmle,  ref[, "tmle"],  tolerance = 1e-12)
+  expect_equal(s1_adj$est,   ref[, "tmle"],  tolerance = 1e-12)   # adjusted
+  expect_equal(s1_unadj$est, ref[, "unadj"], tolerance = 1e-12)   # unadjusted = adj_covars NULL
 })
 
 test_that("stage1_ratio (plain-mean numerator / censored denominator) matches reference", {
@@ -71,12 +71,12 @@ test_that("stage1_ratio (plain-mean numerator / censored denominator) matches re
   dat <- gen_censored_crt(J = 6, N_mean = 80, seed = 31L)
   lib <- "glm"; w1 <- c("W1", "W2")
 
-  # opal coverage/yield shape: numerator = plain mean of `started`,
-  # denominator = censored mean of `eligible`.
-  s1 <- stage1_ratio(dat, num_col = "started", den_col = "eligible",
-                     num_censored = FALSE, den_censored = TRUE,
-                     den_adj = w1, sl_library = lib)
-  s1 <- s1[order(id)]
+  # opal coverage/yield shape: numerator `started` is fully observed (-> plain
+  # mean via the no-NA short-circuit), denominator `eligible` is censored.
+  s1_adj   <- stage1_ratio(dat, num_col = "started", den_col = "eligible",
+                           den_adj = w1, sl_library = lib)[order(id)]
+  s1_unadj <- stage1_ratio(dat, num_col = "started", den_col = "eligible",
+                           den_adj = NULL, sl_library = lib)[order(id)]
 
   ref <- t(vapply(sort(unique(dat$id)), function(j) {
     oc  <- dat[id == j]
@@ -85,6 +85,29 @@ test_that("stage1_ratio (plain-mean numerator / censored denominator) matches re
     c(unadj = num / den$unadj, tmle = num / den$tmle)
   }, numeric(2)))
 
-  expect_equal(s1$unadj, ref[, "unadj"], tolerance = 1e-12)
-  expect_equal(s1$tmle,  ref[, "tmle"],  tolerance = 1e-12)
+  expect_equal(s1_adj$est,   ref[, "tmle"],  tolerance = 1e-12)   # adjusted denominator
+  expect_equal(s1_unadj$est, ref[, "unadj"], tolerance = 1e-12)   # unadjusted denominator
+})
+
+test_that("stage1_mean accepts a function-valued adj_covars (per-cluster set)", {
+  skip_if_not_installed("ltmle")
+  dat <- gen_censored_crt(J = 6, N_mean = 80, seed = 41L)
+  lib <- "glm"
+  # shrink the adjustment set for clusters with < 78 rows
+  adj_fun <- function(oc) if (nrow(oc) < 78) "W1" else c("W1", "W2")
+
+  s1 <- stage1_mean(dat, y_col = "eligible", adj_covars = adj_fun, sl_library = lib)
+  s1 <- s1[order(id)]
+
+  ref <- t(vapply(sort(unique(dat$id)), function(j) {
+    oc  <- dat[id == j]
+    adj <- if (nrow(oc) < 78) "W1" else c("W1", "W2")
+    r   <- ref_censored_pair(oc, "eligible", adj, lib)
+    c(unadj = r$unadj, tmle = r$tmle)
+  }, numeric(2)))
+
+  expect_equal(s1$est, ref[, "tmle"], tolerance = 1e-12)
+  # at least one cluster on each side of the size threshold, so the function path matters
+  sizes <- dat[, .N, by = id]$N
+  expect_true(any(sizes < 78) && any(sizes >= 78))
 })
