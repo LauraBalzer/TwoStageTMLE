@@ -19,15 +19,17 @@ test_that("as_stage2_list builds the leaf shape", {
 
   leaf <- as_stage2_list(RD = rd, aRR = arr)
 
-  expect_true(all(c("arms", "RD", "aRR", "adjustment") %in% names(leaf)))
+  expect_true(all(c("arms", "RD", "aRR") %in% names(leaf)))
   expect_named(leaf$arms, c("txt", "con"))
   expect_named(leaf$arms$txt, c("est", "ci_lo", "ci_hi", "se"))
-  expect_named(leaf$RD, c("est", "ci_lo", "ci_hi", "se", "pval"))
-  expect_named(leaf$aRR, c("est", "ci_lo", "ci_hi", "se", "pval"))
-  expect_true("q_adj" %in% names(leaf$adjustment))
+  # q_adj is carried PER GOAL (APS is run per goal)
+  expect_named(leaf$RD, c("est", "ci_lo", "ci_hi", "se", "pval", "q_adj"))
+  expect_named(leaf$aRR, c("est", "ci_lo", "ci_hi", "se", "pval", "q_adj"))
   # leaf values agree with the source data.tables
-  expect_equal(unname(leaf$RD["est"]),  rd$est)
+  expect_equal(unname(leaf$RD["est"]),   rd$est)
   expect_equal(unname(leaf$aRR["pval"]), arr$pval)
+  expect_equal(unname(leaf$RD["q_adj"]),  as.numeric(rd$q_adj))
+  expect_equal(unname(leaf$aRR["q_adj"]), as.numeric(arr$q_adj))
   expect_equal(unname(leaf$arms$txt["est"]), rd$txt_est)
 })
 
@@ -43,8 +45,9 @@ test_that("flatten_stage2 collapses a nested list to one row per leaf", {
 
   expect_equal(nrow(flat), 2L)
   expect_true(all(c("subgroup", "estimator", "txt_est",
-                    "RD_est", "RD_pval", "aRR_est", "q_adj") %in% names(flat)))
+                    "RD_est", "RD_pval", "RD_q_adj", "aRR_est", "aRR_q_adj") %in% names(flat)))
   expect_equal(flat$subgroup, c("ALL", "ALL"))
   expect_equal(flat$estimator, c("tmle", "unadj"))
   expect_equal(flat$RD_est[1], rd$est)
+  expect_equal(flat$aRR_q_adj[1], as.numeric(arr$q_adj))
 })

@@ -15,9 +15,11 @@
 #'   as the goal labels; if unnamed, each result's own `goal` is used when
 #'   present, else `g1`, `g2`, ...
 #'
-#' @return A plain `list` with `arms` (`txt`, `con` numeric vectors), one numeric
-#'   vector per goal (`est`, `ci_lo`, `ci_hi`, `se`, `pval`), and `adjustment`.
-#'   Arm means are taken from the first result (they do not depend on the goal).
+#' @return A plain `list` with `arms` (`txt`, `con` numeric vectors) and one
+#'   numeric vector per goal (`est`, `ci_lo`, `ci_hi`, `se`, `pval`, `q_adj`),
+#'   where `q_adj` is the APS-selected outcome-adjustment index **for that goal**
+#'   (APS is run per goal, so it can differ between, say, RD and aRR). Arm means
+#'   are taken from the first result (they do not depend on the goal).
 #' @export
 as_stage2_list <- function(...) {
   ests <- list(...)
@@ -43,12 +45,11 @@ as_stage2_list <- function(...) {
   )
   for (i in seq_along(ests)) {
     e <- ests[[i]]
+    # q_adj is per goal: APS is run separately for each goal, so the selected
+    # adjustment index can differ between e.g. RD and aRR.
     out[[goal_names[i]]] <- c(est = e$est, ci_lo = e$ci_lo, ci_hi = e$ci_hi,
-                              se = e$se, pval = e$pval)
+                              se = e$se, pval = e$pval, q_adj = e$q_adj)
   }
-  # adjustment indices come from the first result (APS selection is shared)
-  out$adjustment <- c(q_adj = first$q_adj, q_form = first$q_form,
-                      g_adj = first$g_adj, g_form = first$g_form)
   out
 }
 
@@ -79,19 +80,15 @@ flatten_stage2 <- function(x, label_names = NULL) {
         con_est = leaf$arms$con[["est"]], con_ci_lo = leaf$arms$con[["ci_lo"]],
         con_ci_hi = leaf$arms$con[["ci_hi"]]
       )
-      goals <- setdiff(names(leaf), c("arms", "adjustment"))
+      goals <- setdiff(names(leaf), "arms")
       for (g in goals) {
         v <- leaf[[g]]
-        names(v) <- paste0(g, "_", names(v))
-        flat <- c(flat, v)            # numeric: arm means + per-goal effects
+        names(v) <- paste0(g, "_", names(v))   # e.g. RD_est, RD_q_adj, aRR_est, ...
+        flat <- c(flat, v)                      # numeric: arm means + per-goal effects + q_adj
       }
       labs <- as.list(path)
       names(labs) <- paste0("label", seq_along(path))
-      # combine as lists so numeric `flat` is not coerced by the character
-      # `adjustment` vector (q_form/g_form)
-      row <- c(labs, as.list(flat))
-      if (!is.null(leaf$adjustment)) row <- c(row, as.list(leaf$adjustment))
-      rows[[length(rows) + 1L]] <<- row
+      rows[[length(rows) + 1L]] <<- c(labs, as.list(flat))
       return(invisible())
     }
     if (is.list(node)) {

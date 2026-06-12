@@ -12,9 +12,11 @@ as the goal labels; if unnamed, each result's own \code{goal} is used when
 present, else \code{g1}, \code{g2}, ...}
 }
 \value{
-A plain \code{list} with \code{arms} (\code{txt}, \code{con} numeric vectors), one numeric
-vector per goal (\code{est}, \code{ci_lo}, \code{ci_hi}, \code{se}, \code{pval}), and \code{adjustment}.
-Arm means are taken from the first result (they do not depend on the goal).
+A plain \code{list} with \code{arms} (\code{txt}, \code{con} numeric vectors) and one
+numeric vector per goal (\code{est}, \code{ci_lo}, \code{ci_hi}, \code{se}, \code{pval}, \code{q_adj}),
+where \code{q_adj} is the APS-selected outcome-adjustment index \strong{for that goal}
+(APS is run per goal, so it can differ between, say, RD and aRR). Arm means
+are taken from the first result (they do not depend on the goal).
 }
 \description{
 Turns the one-row \code{data.table} returned by \code{\link[=stage2_tmle]{stage2_tmle()}} — or several such
